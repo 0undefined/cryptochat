@@ -2,6 +2,13 @@
 
 char *log_buffer[1024];
 
+struct Command {
+    const char *command;
+    const char *help;
+    int (*fun)(char *argv);
+};
+
+
 static volatile unsigned char is_running = 0xff;
 unsigned char TUI = 0x00;
 enum MODES TUI_MODE = MODE_COMMAND;
@@ -65,7 +72,7 @@ void add_log_error(char *log_msg, ...) {
         int stacksize = backtrace(tracebuf, 8);
         char **tracestr = backtrace_symbols(tracebuf, stacksize);
         wprintw(log_win, "    > stacktrace:\n");
-        for(int i = 0; i < stacksize; i++) wprintw(log_win, "    > %s\n", tracestr[i]);
+        for(int i = 0; i < stacksize; i++) wprintw(log_win, "        > %s\n", tracestr[i]);
         free(tracestr);
         free(tracebuf);
 #endif
@@ -102,6 +109,41 @@ void interrupt_handler(int signal) {
     if(TUI) { endwin(); }
     exit(EXIT_SUCCESS);
 }
+
+int _echo(char *argv) {
+    if(argv == NULL) return 1;
+    else if(argv[0] == '\0') return 1;
+    add_log("> %s", argv);
+    return 0;
+}
+
+int _quit(char *none) {
+    none=none;
+    cleanup();
+    if(TUI) {
+        endwin();
+    }
+    printf("\n");
+    exit(EXIT_SUCCESS);
+    return 0;
+}
+
+int _help(char *command) {
+    if(command == NULL) return 1;
+    if(command[0] != '\0') {
+        // TODO: find the appropriate command
+        add_log("");
+    } else {
+        add_log(HELP_COMMANDS);
+    }
+    return 0;
+}
+
+const struct Command root_commands[] = {
+    {"echo", "text", _echo},
+    {"help", "[command]", _help},
+    {"quit", " -quits the program", _quit},
+};
 
 int command_recognizer(char *cmd);
 WINDOW *create_newwin(int height, int width, int starty, int startx);
@@ -265,6 +307,17 @@ int main(int argc, char* argv[]) {
 int command_recognizer(char *cmd) {
     char *first = strtok(cmd, " ");
     if(first == NULL) return -1;
+
+    for(int i = 0; i < 2; i++) {
+        if(strcmp(first, root_commands[i].command) == 0) {
+            int ret = root_commands[i].fun(cmd + strlen(first) + 1);
+            if(ret != 0) {
+                add_log_error("Usage: %s %s", root_commands[i].command, (char*)root_commands[i].help);
+            }
+        }
+    }
+
+    /*
     if(strcmp(first, "quit") == 0) {
         cleanup();
         if(TUI) {
@@ -272,7 +325,8 @@ int command_recognizer(char *cmd) {
         }
         printf("\n");
         exit(EXIT_SUCCESS);
-    } else if(strcmp(first, "connect") == 0) {
+    } else */
+        if(strcmp(first, "connect") == 0) {
         // expect 1-2 more arguments
         char *host = strtok(NULL, " ");
         int port = DEFAULT_PORT;
