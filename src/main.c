@@ -266,6 +266,7 @@ int command_recognizer(char *cmd) {
     char *first = strtok(cmd, " ");
     if(first == NULL) return -1;
     if(strcmp(first, "quit") == 0) {
+        cleanup();
         if(TUI) {
             endwin();
         }

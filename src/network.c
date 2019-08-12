@@ -86,10 +86,20 @@ void *connection_handler(void *in) {
     int sock = *((int*)in),
         read_size;
 
+    char *hostname = (char*)malloc(sizeof(char)*512);
+    socklen_t hostlen = sizeof(char) * 512;
+
+    struct sockaddr_in address;
+    socklen_t addrlen;
+
+    getpeername(sock, (struct sockaddr*)&address, &addrlen);
+    getnameinfo((struct sockaddr*)&address, addrlen,
+            hostname, hostlen,
+            NULL, 0, 0);
+
     char *message = "Greetings traveler!",
          client_msg[2048];
 
-    write(sock, message, strlen(message));
 
     while((read_size = recv(sock, client_msg, 2048, 0)) > 0) {
 
@@ -114,6 +124,8 @@ void *connection_handler(void *in) {
         add_log_error("Receive failed (%d): %s", errno, strerror(errno));
     }
 
+    close(sock);
+    free(hostname);
     return NULL;
 }
 
@@ -126,12 +138,19 @@ void *connection_manager(void *in) {
     struct sockaddr_in client;
 
     handlers = (pthread_t*)malloc(sizeof(pthread_t) * MAX_CONNECTIONS);
+    for(int j = 0; j < MAX_CONNECTIONS; j++) handlers[i] = 0;
+    add_log("thread: %p", handlers[i]);
 
     manager_ready = 0xff;
     // Log something instead
     //add_log("Manager has entered the game!");
 
-    while((client_socks[i] = accept(sock, (struct sockaddr*)&client, (socklen_t*)&c)) != -1) {
+    while((client_socks[i] = accept(sock,
+                                    (struct sockaddr*)&client,
+                                    (socklen_t*)&c)) != -1 && manager_ready != 0) {
+        if(client_socks[i] == -1 || (errno == EAGAIN || errno == EWOULDBLOCK)) { sleep(1); continue; }
+        if(manager_ready == 0) break;
+
         add_log("Accepted connection");
 
         if(pthread_create(&handlers[i], NULL, connection_handler, &(client_socks[i])) < 0) {
@@ -143,9 +162,18 @@ void *connection_manager(void *in) {
     if(client_socks[i] == -1) {
         add_log_error("Error (%d): %s", errno, strerror(errno));
     }
-    //pthread_join();
-    //free(handlers);
+    // Cleanup
+    for(int j = 0; j < MAX_CONNECTIONS; j++) if(handlers[j] != 0) pthread_join(handlers[j], NULL);
+
+    free(client_socks);
+    free(handlers);
     return NULL;
+}
+
+void cleanup() {
+    manager_ready = 0x00;
+    pthread_join(handler_thread, NULL);
+    return;
 }
 
 int init_listener(int port, int concurrent_connections) {
@@ -158,7 +186,7 @@ int init_listener(int port, int concurrent_connections) {
 
     struct sockaddr_in server;
 
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+    socket_desc = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if(socket_desc == -1) {
         add_log_error("Failed to create socket.");
         return -1;
@@ -171,11 +199,11 @@ int init_listener(int port, int concurrent_connections) {
     MAX_CONNECTIONS = concurrent_connections;
 
     if(bind(socket_desc, (struct sockaddr*)&server,sizeof(server)) < 0) {
-        add_log_error("Failed to bind to port %d.", (unsigned)server.sin_port);
+        add_log_error("Failed to bind to port %d, (%d): %s", (unsigned)server.sin_port, errno, strerror(errno));
         return -1;
     }
 
-    listen(socket_desc, 3);
+    listen(socket_desc, MAX_CONNECTIONS);
 
     pthread_create(&handler_thread, NULL, connection_manager, &socket_desc);
 
@@ -233,10 +261,6 @@ int connect_host(char *host, int port) {
     }
 
     close(sock);
-
-
-
-
     return 0;
 }
 
@@ -270,3 +294,7 @@ int connect_host_wrapper() {
     }
     return connect_host(host, port);
 }
+
+//int send_msg(char *host, char *msg) {
+//    //
+//}
