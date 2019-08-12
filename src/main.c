@@ -60,6 +60,15 @@ void add_log_error(char *log_msg, ...) {
         wprintw(log_win, "! ");
         wattroff(log_win, COLOR_PAIR(2));
         wprintw(log_win, "%s\n", buffer);
+#ifdef DEBUG
+        void **tracebuf = (void*)malloc(sizeof(void*)*8);
+        int stacksize = backtrace(tracebuf, 8);
+        char **tracestr = backtrace_symbols(tracebuf, stacksize);
+        wprintw(log_win, "    > stacktrace:\n");
+        for(int i = 0; i < stacksize; i++) wprintw(log_win, "    > %s\n", tracestr[i]);
+        free(tracestr);
+        free(tracebuf);
+#endif
         wrefresh(log_win);
     } else {
         fprintf(stderr, "[%02d:%02d] ! %s\n", tm.tm_hour, tm.tm_min, buffer);

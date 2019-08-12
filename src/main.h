@@ -9,6 +9,10 @@
 #include <wchar.h>
 #include <time.h>
 
+#ifdef DEBUG
+#include <execinfo.h>
+#endif
+
 #include "network.h"
 
 #define HELP_CONNECT "Usage: connect HOST[:PORT]"
