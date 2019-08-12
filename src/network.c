@@ -143,12 +143,15 @@ void *connection_manager(void *in) {
 
     manager_ready = 0xff;
     // Log something instead
-    //add_log("Manager has entered the game!");
+    add_log("Connection manager is ready");
 
-    while((client_socks[i] = accept(sock,
-                                    (struct sockaddr*)&client,
-                                    (socklen_t*)&c)) != -1 && manager_ready != 0) {
-        if(client_socks[i] == -1 || (errno == EAGAIN || errno == EWOULDBLOCK)) { sleep(1); continue; }
+    while(manager_ready != 0) {
+        client_socks[i] = accept(sock, (struct sockaddr*)&client, (socklen_t*)&c);
+
+        if(client_socks[i] == -1) {
+            if(errno == EAGAIN || errno == EWOULDBLOCK) { sleep(1); continue; }
+            else break;
+        }
         if(manager_ready == 0) break;
 
         add_log("Accepted connection");
