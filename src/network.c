@@ -12,6 +12,13 @@
 #include "network.h"
 #include "crypto.h"
 
+#define HTML \
+    "HTTP/1.1 200 OK\n" \
+    "\n" \
+    "<!DOCTYPE html><main>" \
+    "We are sorry to announce that this is <u>NOT</u> a http server!" \
+    "</main></html>"
+
 int MAX_CONNECTIONS = 256;
 
 pthread_t *handlers = NULL;
@@ -22,6 +29,41 @@ unsigned char manager_ready = 0;
 extern void add_log_error(char *log_msg, ...);
 extern void add_log(char *log_msg, ...);
 
+int is_http_request(char *request) {
+    /* Example */
+    // GET / HTTP/1.1
+    // Host: localhost:8080
+    // User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:69.0) Gecko/20100101 Firefox/69.0
+    // Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+    // Accept-Language: en-US,en;q=0.5
+    // Accept-Encoding: gzip, deflate
+    // DNT: 1
+    // Connection: keep-alive
+    // Upgrade-Insecure-Requests: 1
+    char *a;
+    int likelyhood = 0;
+    if(strcmp((a = strtok(request, " ")), "GET") == 0) likelyhood++;
+    else if(strcmp(a, "HEAD") == 0) likelyhood++;
+    else if(strcmp(a, "POST") == 0) likelyhood++;
+    else if(strcmp(a, "PUT") == 0) likelyhood++;
+    else if(strcmp(a, "DELETE") == 0) likelyhood++;
+    else if(strcmp(a, "CONNECT") == 0) likelyhood++;
+    else if(strcmp(a, "OPTIONS") == 0) likelyhood++;
+    else if(strcmp(a, "TRACE") == 0) likelyhood++;
+
+    a = strtok(NULL, " ");
+    if(a == NULL) return likelyhood;
+    else if(strcmp(a, "/") == 0) likelyhood++;
+    else if(strcmp(a, "*") == 0) likelyhood++;
+    else if(a[0] == '/' && a[strlen(a)-1] == '/') likelyhood++;
+
+    a = strtok(NULL, " ");
+    if(a == NULL) return likelyhood;
+    else if(strcmp(a, "HTTP/1.0") == 0) likelyhood++;
+    else if(strcmp(a, "HTTP/1.1") == 0) likelyhood++;
+
+    return likelyhood;
+}
 
 int host_name_to_ip(char *hostname) {
     struct hostent *he;
@@ -50,9 +92,20 @@ void *connection_handler(void *in) {
     write(sock, message, strlen(message));
 
     while((read_size = recv(sock, client_msg, 2048, 0)) > 0) {
-        // ECHO :turd:
-        write(sock, client_msg, strlen(client_msg));
-        add_log("recv: %s", client_msg);
+
+        if(is_http_request(client_msg) >= 1) {
+            write(sock, HTML, strlen(HTML));
+            close(sock);
+            add_log("A bastard thought this was a http server");
+            return NULL;
+        }
+
+        write(sock, message, strlen(message));
+        //write(sock, client_msg, strlen(client_msg));
+        if(hostname != NULL && strlen(hostname) > 0)
+            add_log("%s: %s", hostname, client_msg);
+        else
+            add_log("%s: %s", inet_ntoa(address.sin_addr), client_msg);
     }
 
     if(read_size == 0) {
