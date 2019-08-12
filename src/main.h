@@ -15,11 +15,11 @@
 
 #include "network.h"
 
-#define HELP_CONNECT "Usage: connect HOST[:PORT]"
+#define HELP_CONNECT "HOST[:PORT]"
 #define HELP_COMMANDS "Commands:\n"\
-  "        help\n" \
-  "        quit\n" \
-  "        connect HOST[:PORT]"
+  "          help\n" \
+  "          quit\n" \
+  "          connect"
 
 enum MODES {
     MODE_COMMAND = 0,

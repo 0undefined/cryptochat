@@ -20,6 +20,7 @@
     "</main></html>"
 
 int MAX_CONNECTIONS = 256;
+int *client_socks;
 
 pthread_t *handlers = NULL;
 pthread_t handler_thread;
@@ -131,19 +132,17 @@ void *connection_handler(void *in) {
 
 void *connection_manager(void *in) {
     int sock = *((int*)in),
-        *client_socks = (int*)malloc(sizeof(int) * MAX_CONNECTIONS),
         i = 0;
+    client_socks = (int*)malloc(sizeof(int) * MAX_CONNECTIONS);
+    for(int j = 0; j < MAX_CONNECTIONS; j++) client_socks[j] = 0;
 
     unsigned long c;
     struct sockaddr_in client;
 
     handlers = (pthread_t*)malloc(sizeof(pthread_t) * MAX_CONNECTIONS);
     for(int j = 0; j < MAX_CONNECTIONS; j++) handlers[i] = 0;
-    add_log("thread: %p", handlers[i]);
 
     manager_ready = 0xff;
-    // Log something instead
-    add_log("Connection manager is ready");
 
     while(manager_ready != 0) {
         client_socks[i] = accept(sock, (struct sockaddr*)&client, (socklen_t*)&c);
@@ -211,37 +210,53 @@ int init_listener(int port, int concurrent_connections) {
     pthread_create(&handler_thread, NULL, connection_manager, &socket_desc);
 
     while(!manager_ready) {sleep(1);};
+    add_log("Connection manager is ready");
 
     return socket_desc;
 }
 
 int connect_host(char *host, int port) {
-    char msg[2048];
+    //char msg[2048];
+    //char reply[2048];
 
-    int sock;
     struct sockaddr_in server;
 
-    char reply[2048];
+    int i = 0;
+    for(;i < MAX_CONNECTIONS; i++) if(handlers[i] == 0 && client_socks[i] == 0) break;
 
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if(sock == -1) {
+    if(handlers[i] != 0 || client_socks[i] != 0) {
+        add_log_error("Not enough avaible connection threads/sockets! (%d, %d)");
+        return 1;
+    }
+
+    client_socks[i] = socket(AF_INET, SOCK_STREAM, 0);
+    if(client_socks[i] == -1) {
         add_log_error("Failed to create socket (%d):%s", errno, strerror(errno));
         return -1;
     }
 
-    server.sin_family       = AF_INET;
-    server.sin_addr.s_addr  = inet_addr(host);
-    server.sin_port         = htons(port);
+    server.sin_family      = AF_INET;
+    server.sin_addr.s_addr = inet_addr(host);
+    server.sin_port        = htons(port);
 
     if(server.sin_addr.s_addr == INADDR_NONE) {
         server.sin_addr.s_addr = host_name_to_ip(host);
     }
 
-    if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0) {
+    // TODO move rest of steps to a thread
+    if (connect(client_socks[i], (struct sockaddr *)&server , sizeof(server)) < 0) {
         add_log_error("Failed to connect to server (%d): %s", errno, strerror(errno));
         return -1;
     }
 
+
+
+    // TODO FREE THIS SOMEHOW I GUESS
+    if(pthread_create(&handlers[i], NULL, connection_handler, &client_socks[i]) < 0) {
+        add_log_error("Failed to create thread (existing threads: %d)", i);
+    }
+
+    /*
     while(1)
     {
         add_log("Send message: ");
@@ -264,6 +279,7 @@ int connect_host(char *host, int port) {
     }
 
     close(sock);
+    */
     return 0;
 }
 

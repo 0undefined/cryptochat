@@ -1,4 +1,5 @@
 #include "main.h"
+#define ROOT_COMMAND_COUNT 4
 
 char *log_buffer[1024];
 
@@ -9,6 +10,7 @@ struct Command {
 };
 
 
+struct Command root_commands[ROOT_COMMAND_COUNT];
 static volatile unsigned char is_running = 0xff;
 unsigned char TUI = 0x00;
 enum MODES TUI_MODE = MODE_COMMAND;
@@ -118,6 +120,7 @@ int _echo(char *argv) {
 }
 
 int _quit(char *none) {
+    add_log("QUIT YOU FAT PIECE OF FUCK");
     none=none;
     cleanup();
     if(TUI) {
@@ -129,21 +132,54 @@ int _quit(char *none) {
 }
 
 int _help(char *command) {
-    if(command == NULL) return 1;
-    if(command[0] != '\0') {
-        // TODO: find the appropriate command
-        add_log("");
+    command = strtok(command, " ");
+    if(command != NULL && strlen(command) != 0) {
+        for(int i = 0; i < ROOT_COMMAND_COUNT; i++) {
+            if(strcmp(command, root_commands[i].command) == 0) {
+                add_log("Usage: %s %s", root_commands[i].command, (char*)root_commands[i].help);
+                break;
+            }
+            if(i == ROOT_COMMAND_COUNT - 1) add_log(HELP_COMMANDS);
+        }
     } else {
         add_log(HELP_COMMANDS);
     }
     return 0;
 }
 
-const struct Command root_commands[] = {
-    {"echo", "text", _echo},
-    {"help", "[command]", _help},
-    {"quit", " -quits the program", _quit},
-};
+int _connect(char *args) {
+    char *host = strtok(args, " ");
+    int port   = DEFAULT_PORT;
+    if(host == NULL) {
+        add_log(HELP_CONNECT);
+        return -1;
+    }
+    char *port_str = strtok(NULL, " ");
+    // Check if non-proper syntax is used, host port
+    if(port_str != NULL) {
+        port = atoi(port_str);
+        if(port == 0) {
+            add_log("Port cannot be '%s'", port_str);
+            return -1;
+        }
+    } else {
+        // check if the proper syntax is used ie. host:port or no port specified at all.
+        host = strtok(host, ":");
+        port_str = strtok(NULL, ":");
+        if(port_str != NULL) {
+            port = atoi(port_str);
+            if(port == 0) {
+                add_log("Port cannot be '%s'", port_str);
+                return -1;
+            }
+        }
+
+    }
+    add_log("Connecting to %s at port %d...", host, port);
+    connect_host(host, port);
+    return 0;
+}
+
 
 int command_recognizer(char *cmd);
 WINDOW *create_newwin(int height, int width, int starty, int startx);
@@ -199,6 +235,11 @@ int main(int argc, char* argv[]) {
     //RSA *keypair = gen_rsa_keypair();
     //printf("%s\n%s\n", get_pub_key(keypair), get_pri_key(keypair));
 
+    root_commands[0] = (const struct Command){"echo", "text", _echo};
+    root_commands[1] = (const struct Command){"help", "[command]", _help};
+    root_commands[2] = (const struct Command){"quit", " -quits the program", _quit};
+    root_commands[3] = (const struct Command){"connect", HELP_CONNECT, _connect};
+
     if(TUI) { // Init ncurses
         setlocale(LC_CTYPE, "");
         initscr();
@@ -241,8 +282,8 @@ int main(int argc, char* argv[]) {
                 }
                 if(oldmode == TUI_MODE && in != KEY_BACKSPACE) { // No change to mode was made
                     if(!isspace(in)) {
-                    line_buffer[col] = in;
-                    line_buffer[++col] = '\0';
+                        line_buffer[col] = in;
+                        line_buffer[++col] = '\0';
                     }
                 }
                 else {
@@ -269,6 +310,7 @@ int main(int argc, char* argv[]) {
                             col = 0;
                         }
                         in = ' ';
+                        for(long unsigned i = 0; i < sizeof(char)*1024; i++) line_buffer[i] = '\0';
                         break;
                     default:
                         line_buffer[col] = in;
@@ -308,63 +350,17 @@ int command_recognizer(char *cmd) {
     char *first = strtok(cmd, " ");
     if(first == NULL) return -1;
 
-    for(int i = 0; i < 2; i++) {
+    for(int i = 0; i < ROOT_COMMAND_COUNT; i++) {
         if(strcmp(first, root_commands[i].command) == 0) {
             int ret = root_commands[i].fun(cmd + strlen(first) + 1);
             if(ret != 0) {
                 add_log_error("Usage: %s %s", root_commands[i].command, (char*)root_commands[i].help);
             }
+            break;
         }
+        if(i == ROOT_COMMAND_COUNT - 1) add_log(HELP_COMMANDS);
     }
 
-    /*
-    if(strcmp(first, "quit") == 0) {
-        cleanup();
-        if(TUI) {
-            endwin();
-        }
-        printf("\n");
-        exit(EXIT_SUCCESS);
-    } else */
-        if(strcmp(first, "connect") == 0) {
-        // expect 1-2 more arguments
-        char *host = strtok(NULL, " ");
-        int port = DEFAULT_PORT;
-        if(host == NULL) {
-            add_log(HELP_CONNECT);
-            return -1;
-        }
-        if(strcmp(host, "help") == 0) {
-            add_log(HELP_CONNECT);
-            return 0;
-        }
-        char *port_str = strtok(NULL, " ");
-        // Check if non-proper syntax is used, host port
-        if(port_str != NULL) {
-            port = atoi(port_str);
-            if(port == 0) {
-                add_log("Port cannot be '%s'", port_str);
-                return -1;
-            }
-        }
-        // check if the proper syntax is used ie. host:port or no port specified at all.
-        else {
-            host = strtok(host, ":");
-            port_str = strtok(NULL, ":");
-            if(port_str != NULL) {
-                port = atoi(port_str);
-                if(port == 0) {
-                    add_log("Port cannot be '%s'", port_str);
-                    return -1;
-                }
-            }
-
-        }
-        add_log("Connecting to %s at port %d...", host, port);
-        connect_host(host, port);
-    } else if(strcmp(first, "help") == 0) {
-        add_log(HELP_COMMANDS);
-    }
     return 0;
 }
 
