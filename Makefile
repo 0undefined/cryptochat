@@ -3,7 +3,7 @@ SRC:=$(wildcard src/*.c)
 OBJ:=$(addprefix obj/,$(notdir $(SRC:.c=.o)))
 LDFLAGS=-lssl -lcrypto -lpthread -lncurses
 CCFLAGS=-Wall -Werror -Wextra -pedantic -c
-DFLAGS=-DDEBUG -g
+DFLAGS=-DDEBUG -g -Og
 RFLAGS=-O2
 OUT=cchat
 
