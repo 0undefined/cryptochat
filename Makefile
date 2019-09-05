@@ -15,7 +15,7 @@ BUILD_DIRS=bin obj
 default: CCFLAGS += $(DFLAGS)
 default: build_dirs compile
 	@echo Debug Build
-	@bin/$(OUT) -t
+	@bin/$(OUT)
 
 # release build, without debug flags and with optimizations
 release: CCFLAGS += $(RFLAGS)

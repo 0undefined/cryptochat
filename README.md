@@ -23,3 +23,15 @@ Most of the prerequisites are available in most package managers.
 * [ ] TUI
 * [ ] Implement commands
 * [ ] Better async execution
+* [ ] Tab completion
+
+
+## Commands
+
+* `:w :whisper`
+    `:w[hisper] [recipient] [message]`
+* `:c :connect`
+    `:c[onnect] [server:[port]]`
+* `:s :say`
+    `:s[ay] [message]`
+    Broadcast message to all connected peers
