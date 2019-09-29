@@ -30,8 +30,10 @@ Most of the prerequisites are available in most package managers.
 
 * `:w :whisper`
     `:w[hisper] [recipient] [message]`
+    Send message to a specific peer
 * `:c :connect`
     `:c[onnect] [server:[port]]`
+    Establishes connection to a peer
 * `:s :say`
     `:s[ay] [message]`
     Broadcast message to all connected peers
