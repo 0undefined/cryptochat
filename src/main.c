@@ -36,7 +36,8 @@ int main(int argc, char* argv[]) {
                 }
                 break;
             case 'v':
-                printf("Verbose flag currently does nothing\n");
+                V = 0xff;
+                //printf("Verbose flag currently does nothing\n");
                 break; // NOT IMPLEMENTED
             case 'h':
             case '?':
@@ -51,10 +52,12 @@ int main(int argc, char* argv[]) {
 
     commands = (struct command*)malloc(sizeof(struct command)*ROOT_COMMAND_COUNT);
 
-    commands[0] = (struct command){ COMMAND_ECHO, 'e', "echo", HELP_ECHO, _echo };
-    commands[1] = (struct command){ COMMAND_HELP, 'h', "help", HELP_COMMANDS, _help };
-    commands[2] = (struct command){ COMMAND_QUIT, 'q', "quit", HELP_QUIT, _quit };
-    commands[3] = (struct command){ COMMAND_CONNECT, 'c', "connect", HELP_CONNECT, _connect };
+    commands[0] = (struct command){ COMMAND_ECHO,       'e', "echo",    HELP_ECHO,      _echo };
+    commands[1] = (struct command){ COMMAND_HELP,       'h', "help",    HELP_HELP,      _help };
+    commands[2] = (struct command){ COMMAND_QUIT,       'q', "quit",    HELP_QUIT,      _quit };
+    commands[3] = (struct command){ COMMAND_CONNECT,    'c', "connect", HELP_CONNECT,   _connect };
+    commands[4] = (struct command){ COMMAND_MSG,        'm', "message", HELP_MSG,       _echo };
+    commands[5] = (struct command){ COMMAND_WHISPER,    'w', "whisper", HELP_WHISPER,   _echo };
 
     setlocale(LC_CTYPE, "");
     initscr(); raw(); noecho();
@@ -82,6 +85,7 @@ int main(int argc, char* argv[]) {
     add_log("ready");
     wmove(cmd_win, 0, 1+col);
     wrefresh(cmd_win);
+
 
     while((in = getch()) != '') {
         // Check if the user tries to change mode from current mode

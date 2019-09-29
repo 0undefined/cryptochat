@@ -22,13 +22,19 @@
 // Definitions
 #define ROOT_COMMAND_COUNT 6
 
-#define HELP_ECHO       "e[cho] [text]      echos some text?"
-#define HELP_CONNECT    "c[connect] [HOST[:PORT]]       connects to HOST through PORT"
-#define HELP_QUIT    "q[uit]             quits the program"
-#define HELP_COMMANDS   "Commands:\n"\
-    "          help\n" \
-    "          quit\n" \
-    "          connect"
+#define HELP_COMMANDS   "Commands:\n" \
+    "          help\n"                \
+    "          quit\n"                \
+    "          connect\n"             \
+    "          message\n"             \
+    "          whisper"
+
+#define HELP_ECHO       "e[cho] [text]\n      echos some text?"
+#define HELP_HELP       "h[elp] [command]\n       Get help about command"
+#define HELP_QUIT       "q[uit]\n       quits the program"
+#define HELP_CONNECT    "c[onnect] [HOST[:PORT]]\n       connects to HOST through PORT"
+#define HELP_MSG        "m[sg|essage] [message]\n       Send a message to all connected peers"
+#define HELP_WHISPER    "w[hisper] [recipient] [message]\n       Send a message to a specified peer"
 
 enum MODES {
     MODE_COMMAND = 0,
@@ -37,6 +43,7 @@ enum MODES {
     MODE_SEARCH  = 3,
 };
 
+unsigned char V = 0;
 struct command *commands;
 static volatile unsigned char is_running = 0xff;
 enum MODES TUI_MODE = MODE_COMMAND;
@@ -152,11 +159,26 @@ void interrupt_handler(int signal) {
 int _echo(char *argv) {
     if(argv == NULL) return 1;
     else if(argv[0] == '\0') return 1;
-    add_log("> %s", argv);
+
+    size_t index = strlen(argv);
+    char *fst = (char*)malloc(sizeof(char)*index+(1024-index));
+    strcpy(fst, argv);
+
+    while((argv = strtok(NULL,"")) != NULL) {
+        *(fst+strlen(fst)) = ' ';
+
+        strcpy(fst+strlen(fst), argv);
+    }
+
+    add_log("%s", fst);
+
+    free(fst);
+
     return 0;
 }
 
-int _quit(void) {
+int _quit(char *_) {
+    _=_; // Ignore arg
     cleanup();
     endwin();
     exit(EXIT_SUCCESS);
@@ -164,11 +186,10 @@ int _quit(void) {
 }
 
 int _help(char *command) {
-    command = strtok(command, " ");
     if(command != NULL && strlen(command) != 0) {
         for(int i = 0; i < ROOT_COMMAND_COUNT; i++) {
             if(strcmp(command, commands[i].longhand) == 0) {
-                add_log("Usage: %s %s", commands[i].help, (char*)commands[i].help);
+                add_log("Usage: %s", commands[i].help);
                 break;
             }
             if(i == ROOT_COMMAND_COUNT - 1) add_log(HELP_COMMANDS);
@@ -213,12 +234,14 @@ int _connect(char *args) {
 }
 
 int command_recognizer(char *cmd) {
+    //size_t cmdlen = strlen(cmd);
     char *first = strtok(cmd, " ");
     if(first == NULL) return -1;
     if(strlen(first) == 0) {
         add_log_error("I honestly don't know how you submitted an empty command.");
     }
     if(strlen(first) == 1) {
+        add_log("shorthand recognized");
         char shorthand = first[0];
         for(int i = 0; i < ROOT_COMMAND_COUNT; i++) {
             if(shorthand == commands[i].shorthand) {
@@ -230,17 +253,20 @@ int command_recognizer(char *cmd) {
             }
             if(i == ROOT_COMMAND_COUNT - 1) add_log(HELP_COMMANDS);
         }
-    }
+    } else {
+        for(int i = 0; i < ROOT_COMMAND_COUNT; i++) {
+            if(strcmp(first, commands[i].longhand) == 0) {
 
-    for(int i = 0; i < ROOT_COMMAND_COUNT; i++) {
-        if(strcmp(first, commands[i].longhand) == 0) {
-            int ret = commands[i].fun(cmd + strlen(first) + 1);
-            if(ret != 0) {
-                add_log_error("Usage: %s", (char*)commands[i].help);
+                char *arg = strtok(NULL, " ");
+
+                int ret = commands[i].fun(arg);
+                if(ret != 0) {
+                    add_log_error("Usage: %s", (char*)commands[i].help);
+                }
+                break;
             }
-            break;
+            if(i == ROOT_COMMAND_COUNT - 1) add_log(HELP_COMMANDS);
         }
-        if(i == ROOT_COMMAND_COUNT - 1) add_log(HELP_COMMANDS);
     }
 
     return 0;
