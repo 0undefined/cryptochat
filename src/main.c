@@ -19,9 +19,10 @@ int add_char(char *buffer[], const int bufsize, int *col, int *buflen, char c) {
         (*buffer)[*col] = c;
         //(*buffer)[*col+1] = '\0';
         (*col)++;
+        (*buflen)++;
 
         strncpy((*buffer)+(*col), tmp, diffsize+1);
-        (*buflen)++;
+        free(tmp);
     }
     return *buflen;
 }
