@@ -1,6 +1,31 @@
 #include "main.h"
 
 
+// Insert 'c' at col in buffer, increment col and buffer
+int add_char(char *buffer[], const int bufsize, int *col, int *buflen, char c) {
+    if(*col >= bufsize) return -1;
+
+    if(*col == *buflen) { // Append 'c' to buffer
+        (*buffer)[*col] = c;
+        (*buffer)[*col+1] = '\0';
+        (*col)++;
+        (*buflen)++;
+
+    } else { // We are inserting a char inside the text
+        const size_t diffsize = (size_t)(*buflen - *col);
+        char *tmp = (char*)malloc(sizeof(char)*diffsize);
+        strncpy(tmp, (*buffer)+(*col), diffsize+1);
+
+        (*buffer)[*col] = c;
+        //(*buffer)[*col+1] = '\0';
+        (*col)++;
+
+        strncpy((*buffer)+(*col), tmp, diffsize+1);
+        (*buflen)++;
+    }
+    return *buflen;
+}
+
 int main(int argc, char* argv[]) {
     signal(SIGINT, interrupt_handler);
 
@@ -76,70 +101,85 @@ int main(int argc, char* argv[]) {
     init_listener(ListenPort, Connections);
 
     size_t bufsize = sizeof(char) * 1024;
-    char *line_buffer = (char*)malloc(bufsize);
+    char *line_buffer = (char*)calloc(1024, sizeof(char));//(char*)malloc(bufsize);
     //ssize_t bytes_read = 0;
 
     int in;
     int col = 0;
+    int buflen = 0;
 
     add_log("ready");
     wmove(cmd_win, 0, 1+col);
     wrefresh(cmd_win);
 
 
-    while((in = getch()) != '') {
+    while((in = getch()) != EOF) {
         // Check if the user tries to change mode from current mode
-        enum MODES oldmode = TUI_MODE;
+        //enum MODES oldmode = TUI_MODE;
         if(col == 0) {
             for(int i = 0; i < (int)strlen(mode_mappings); i++) {
                 if(in == mode_mappings[i] && (enum MODES)i != TUI_MODE) {
                     update_cmd_mode((enum MODES)i);
+                    goto skip;
                 }
             }
-            if(oldmode == TUI_MODE && in != KEY_BACKSPACE) { // No change to mode was made
-                if(!isspace(in)) {
-                    line_buffer[col] = in;
-                    line_buffer[++col] = '\0';
+        }
+        switch(in) {
+            case KEY_BACKSPACE:
+                if(col > 0) {
+                    line_buffer[--col] = '\0';
+                    buflen--;
+                    //in = ' ';
+                    clear_cmd_buffer();
+                    update_cmd_buffer(line_buffer);
                 }
-            }
-            else {
                 in = ' ';
-            }
-        }
-        else {
-            switch(in) {
-                case KEY_BACKSPACE:
-                    if(col > 0) {
-                        line_buffer[--col] = '\0';
-                        in = ' ';
-                        clear_cmd_buffer();
-                        update_cmd_buffer(line_buffer);
-                    }
-                    break;
-                case '\n':
-                case '\r':
-                case KEY_ENTER:
-                    if(col > 0) {
-                        command_recognizer(line_buffer);
-                        for(int i = 0; i < (int)strlen(line_buffer); i++) line_buffer[i] = '\0';
-                        clear_cmd_buffer();
-                        col = 0;
-                    }
-                    in = ' ';
-                    for(long unsigned i = 0; i < sizeof(char)*1024; i++) line_buffer[i] = '\0';
-                    break;
-                default:
-                    line_buffer[col] = in;
-                    line_buffer[++col] = '\0';
-                    break;
-            }
+                break;
+                //case ASCII_DELETE:
+                //    if(buflen > 0) {
+                //    if(col == buflen 0) {
+                //        line_buffer[col] = '\0';
+                //        in = ' ';
+                //        clear_cmd_buffer();
+                //        update_cmd_buffer(line_buffer);
+                //        buflen--;
+                //    }
+                //    }
+                //    break;
+            case ASCII_LF:
+            case ASCII_CR:
+            case KEY_ENTER:
+                if(col > 0) {
+                    command_recognizer(line_buffer);
+                    for(long unsigned i = 0; i < 1024; i++) line_buffer[i] = '\0';
+                    clear_cmd_buffer();
+                    col    = 0;
+                    buflen = 0;
+                }
+                //in = ' ';
+                break;
+            case KEY_LEFT:
+                col = MAX(0, col-1);
+                break;
+            case KEY_RIGHT:
+                col = MIN(buflen, col+1);
+                break;
+            default:
+                //if(in > 31 && in < 127) {}
+                add_char(&line_buffer, bufsize, &col, &buflen, in);
+                //line_buffer[col] = in;
+                //line_buffer[++col] = '\0';
+                //buflen++;
+                break;
         }
 
-        waddch(cmd_win, (char)in);
+        update_cmd_buffer(line_buffer);
 
-        mvwprintw(cmd_win, 0, COLS-12, "% 4d,%d", col, strlen(line_buffer));
-        wmove(cmd_win, 0, 1+col);
-        wrefresh(cmd_win);
+        skip: {
+          mvwprintw(cmd_win, 0, COLS-12, "% 4d,%d,%d", col, buflen, strlen(line_buffer));
+          wmove(cmd_win, 0, 1+col);
+          wrefresh(cmd_win);
+        };
 
         //update_cmd_buffer(line_buffer);
     }

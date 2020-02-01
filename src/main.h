@@ -18,6 +18,7 @@
 // Homebrewn libraries
 #include "network.h"
 #include "commands.h"
+#include "ascii.h"
 
 // Definitions
 #define ROOT_COMMAND_COUNT 6
@@ -35,6 +36,9 @@
 #define HELP_CONNECT    "c[onnect] [HOST[:PORT]]\n       connects to HOST through PORT"
 #define HELP_MSG        "m[sg|essage] [message]\n       Send a message to all connected peers"
 #define HELP_WHISPER    "w[hisper] [recipient] [message]\n       Send a message to a specified peer"
+
+#define MAX(a,b) (a > b ? a : b)
+#define MIN(a,b) (a < b ? a : b)
 
 enum MODES {
     MODE_COMMAND = 0,
