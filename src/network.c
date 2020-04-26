@@ -9,21 +9,23 @@
 
 #define NETWORK_C
 
+#include "common.h"
 #include "network.h"
 #include "crypto.h"
 
-#define HTML \
+#define HTML_RESPONSE \
     "HTTP/1.1 200 OK\n" \
     "\n" \
-    "<!DOCTYPE html><main>" \
-    "We are sorry to announce that this is <u>NOT</u> a http server!" \
-    "</main></html>"
+    "<!DOCTYPE html><main><tt>" \
+    PROGNAME " v." STR(VERSION_MAJOR) "." STR(VERSION_MINOR) "." STR(VERSION_PATCH) " has no HTTP api." \
+    "</tt></main></html>"
 
 int MAX_CONNECTIONS = 256;
 int *client_socks;
 
 pthread_t *handlers = NULL;
 pthread_t handler_thread;
+char handler_thread_alive = 0;
 
 unsigned char manager_ready = 0;
 
@@ -105,9 +107,9 @@ void *connection_handler(void *in) {
     while((read_size = recv(sock, client_msg, 2048, 0)) > 0) {
 
         if(is_http_request(client_msg) >= 1) {
-            write(sock, HTML, strlen(HTML));
+            write(sock, HTML_RESPONSE, strlen(HTML_RESPONSE));
             close(sock);
-            add_log("A bastard thought this was a http server");
+            add_log("HTTP requests are unsupported. Dropping connection.");
             return NULL;
         }
 
@@ -161,6 +163,7 @@ void *connection_manager(void *in) {
         i++;
         if(i == MAX_CONNECTIONS) break; // and die
     }
+
     if(client_socks[i] == -1) {
         add_log_error("Error (%d): %s", errno, strerror(errno));
     }
@@ -174,7 +177,7 @@ void *connection_manager(void *in) {
 
 void cleanup() {
     manager_ready = 0x00;
-    pthread_join(handler_thread, NULL);
+    if(handler_thread_alive) pthread_join(handler_thread, NULL);
     return;
 }
 
@@ -200,17 +203,22 @@ int init_listener(int port, int concurrent_connections) {
 
     MAX_CONNECTIONS = concurrent_connections;
 
-    if(bind(socket_desc, (struct sockaddr*)&server,sizeof(server)) < 0) {
-        add_log_error("Failed to bind to port %d, (%d): %s", (unsigned)server.sin_port, errno, strerror(errno));
+    if(bind(socket_desc, (struct sockaddr*)&server, sizeof(server)) < 0) {
+        add_log_error("Failed to bind to port %d, (%d): %s", ntohs(server.sin_port), errno, strerror(errno));
         return -1;
     }
 
     listen(socket_desc, MAX_CONNECTIONS);
 
-    pthread_create(&handler_thread, NULL, connection_manager, &socket_desc);
+    int err = 0;
+    if((err = pthread_create(&handler_thread, NULL, connection_manager, &socket_desc)) == 0) {
+        handler_thread_alive = 1;
+    } else {
+        add_log_error("Failed to create create thread. (%d) %s", err, strerror(err));
+    }
 
     while(!manager_ready) {sleep(1);};
-    add_log("Connection manager is ready");
+    add_log("Successfully bound to port %d", ntohs(server.sin_port));
 
     return socket_desc;
 }

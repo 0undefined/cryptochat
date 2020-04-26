@@ -1,31 +1,6 @@
 #include "main.h"
 
 
-// Insert 'c' at col in buffer, increment col and buffer
-int add_char(char *buffer[], const int bufsize, int *col, int *buflen, char c) {
-    if(*col >= bufsize) return -1;
-
-    if(*col == *buflen) { // Append 'c' to buffer
-        (*buffer)[*col] = c;
-        (*buffer)[*col+1] = '\0';
-        (*col)++;
-        (*buflen)++;
-
-    } else { // We are inserting a char inside the text
-        const size_t diffsize = (size_t)(*buflen - *col);
-        char *tmp = (char*)malloc(sizeof(char)*diffsize);
-        strncpy(tmp, (*buffer)+(*col), diffsize+1);
-
-        (*buffer)[*col] = c;
-        //(*buffer)[*col+1] = '\0';
-        (*col)++;
-        (*buflen)++;
-
-        strncpy((*buffer)+(*col), tmp, diffsize+1);
-        free(tmp);
-    }
-    return *buflen;
-}
 
 int main(int argc, char* argv[]) {
     signal(SIGINT, interrupt_handler);
@@ -106,7 +81,6 @@ int main(int argc, char* argv[]) {
     //ssize_t bytes_read = 0;
 
     int in;
-    int col = 0;
     int buflen = 0;
 
     add_log("ready");
@@ -127,26 +101,44 @@ int main(int argc, char* argv[]) {
         }
         switch(in) {
             case KEY_BACKSPACE:
-                if(col > 0) {
-                    line_buffer[--col] = '\0';
-                    buflen--;
-                    //in = ' ';
+                if(rm_char(&line_buffer, bufsize, &col, &buflen) != -1) {
                     clear_cmd_buffer();
-                    update_cmd_buffer(line_buffer);
                 }
-                in = ' ';
                 break;
-                //case ASCII_DELETE:
-                //    if(buflen > 0) {
-                //    if(col == buflen 0) {
-                //        line_buffer[col] = '\0';
-                //        in = ' ';
-                //        clear_cmd_buffer();
-                //        update_cmd_buffer(line_buffer);
-                //        buflen--;
-                //    }
-                //    }
-                //    break;
+            case KEY_DC:
+                col++;
+                if(rm_char(&line_buffer, bufsize, &col, &buflen) != -1) {
+                    clear_cmd_buffer();
+                } else col--;
+                break;
+
+            case KEY_LEFT:
+                col = MAX(0, col-1);
+                break;
+            case KEY_RIGHT:
+                col = MIN(buflen, col+1);
+                break;
+
+            case CTRL('e'):
+            case KEY_END:
+                col = buflen;
+                break;
+            case CTRL('a'):
+            case KEY_HOME:
+                col = 0;
+                break;
+
+            case CTRL('w'):
+                {
+                    int i = col-1;
+                    if(isspace(line_buffer[i])) for(; i >= 0 && isspace(line_buffer[i]); i--);
+                    for(; i >= 0 && !isspace(line_buffer[i]); i--);
+
+                    rm_chars(&line_buffer, bufsize, &col, &buflen, buflen - i);
+                    clear_cmd_buffer();
+                }
+                break;
+
             case ASCII_LF:
             case ASCII_CR:
             case KEY_ENTER:
@@ -159,11 +151,9 @@ int main(int argc, char* argv[]) {
                 }
                 //in = ' ';
                 break;
-            case KEY_LEFT:
-                col = MAX(0, col-1);
-                break;
-            case KEY_RIGHT:
-                col = MIN(buflen, col+1);
+            // up/down should iterate through history
+            case KEY_UP:
+            case KEY_DOWN:
                 break;
             default:
                 //if(in > 31 && in < 127) {}
@@ -177,7 +167,8 @@ int main(int argc, char* argv[]) {
         update_cmd_buffer(line_buffer);
 
         skip: {
-          mvwprintw(cmd_win, 0, COLS-12, "% 4d,%d,%d", col, buflen, strlen(line_buffer));
+          mvwprintw(cmd_win, 0, COLS-12,
+                  "% 4d,% 2d,% 2d", col, buflen, strlen(line_buffer));
           wmove(cmd_win, 0, 1+col);
           wrefresh(cmd_win);
         };

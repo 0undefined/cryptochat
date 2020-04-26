@@ -16,6 +16,7 @@
 #endif
 
 // Homebrewn libraries
+#include "common.h"
 #include "network.h"
 #include "commands.h"
 #include "ascii.h"
@@ -33,7 +34,7 @@
 #define HELP_ECHO       "e[cho] [text]\n      echos some text?"
 #define HELP_HELP       "h[elp] [command]\n       Get help about command"
 #define HELP_QUIT       "q[uit]\n       quits the program"
-#define HELP_CONNECT    "c[onnect] [HOST[:PORT]]\n       connects to HOST through PORT"
+#define HELP_CONNECT    "c[onnect] [HOST[:PORT]]\n       connects to HOST through PORT (default is " STR(DEFAULT_PORT) ")"
 #define HELP_MSG        "m[sg|essage] [message]\n       Send a message to all connected peers"
 #define HELP_WHISPER    "w[hisper] [recipient] [message]\n       Send a message to a specified peer"
 
@@ -54,6 +55,7 @@ enum MODES TUI_MODE = MODE_COMMAND;
 WINDOW *cmd_win;
 WINDOW *log_win;
 struct tm tm;
+int col = 0;
 
 char *log_buffer[1024];
 
@@ -73,27 +75,13 @@ char mode_mappings[] = {
     "  -c NUM   Allows NUM amount of connections simultanously before ignoring\n" \
     "           incoming connections \x1b[31mNOT IMPLEMENTED\x1b[0m\n" \
     "  -i ID    Use ID-file for public/private key encryption \x1b[31mNOT IMPLEMENTED\x1b[0m\n" \
-    "  -p PORT  Listen on port PORT\n" \
+    "  -p PORT  Listen on port PORT (default is " STR(DEFAULT_PORT) ")\n" \
     "  -v       Verbose \x1b[31mNOT IMPLEMENTED\x1b[0m\n"
 
 void update_cmd_mode(enum MODES new_mode) {
     TUI_MODE = new_mode;
     wattron(cmd_win, COLOR_PAIR(1));
-    switch(new_mode) {
-        case MODE_CHAT:
-            mvwprintw(cmd_win, 0, 0, "#");
-            break;
-        case MODE_VISUAL:
-            mvwprintw(cmd_win, 0, 0, "?");
-            break;
-        case MODE_SEARCH:
-            mvwprintw(cmd_win, 0, 0, "/");
-            break;
-        case MODE_COMMAND:
-        default:
-            mvwprintw(cmd_win, 0, 0, ":");
-            break;
-    }
+    mvwprintw(cmd_win, 0, 0, "%c", mode_mappings[TUI_MODE]);
     wattroff(cmd_win, COLOR_PAIR(1));
     wrefresh(cmd_win);
 }
@@ -120,7 +108,6 @@ void add_log_error(char *log_msg, ...) {
 
     va_end(args);
 
-
     wprintw(log_win, "[%02d:%02d] ", tm.tm_hour, tm.tm_min);
     wattron(log_win, COLOR_PAIR(2));
     wprintw(log_win, "! ");
@@ -135,7 +122,9 @@ void add_log_error(char *log_msg, ...) {
     free(tracestr);
     free(tracebuf);
 #endif
+    wmove(cmd_win, 0, 1+col);
     wrefresh(log_win);
+    wrefresh(cmd_win);
 }
 
 void add_log(char *log_msg, ...) {
@@ -151,7 +140,11 @@ void add_log(char *log_msg, ...) {
     va_end(args);
 
     wprintw(log_win, "[%02d:%02d] %s\n", tm.tm_hour, tm.tm_min, buffer);
+
+    wmove(cmd_win, 0, 1+col);
+
     wrefresh(log_win);
+    wrefresh(cmd_win);
 }
 
 void interrupt_handler(int signal) {
@@ -276,6 +269,7 @@ int command_recognizer(char *cmd) {
     return 0;
 }
 
+
 WINDOW *create_newwin(int height, int width, int starty, int startx) {
     WINDOW *local_win;
 
@@ -287,4 +281,61 @@ WINDOW *create_newwin(int height, int width, int starty, int startx) {
     wrefresh(local_win);
 
     return local_win;
+}
+
+
+// Insert 'c' at col in buffer, increment col and buffer
+int add_char(char *buffer[], const int bufsize, int *col, int *buflen, char c) {
+    if(*col >= bufsize) return -1;
+
+    if(*col == *buflen) { // Append 'c' to buffer
+        (*buffer)[*col] = c;
+        (*buffer)[*col+1] = '\0';
+        (*col)++;
+        (*buflen)++;
+
+    } else { // We are inserting a char inside the text
+        const size_t diffsize = (size_t)(*buflen - *col);
+        char *tmp = (char*)malloc(sizeof(char)*diffsize);
+        strncpy(tmp, (*buffer)+(*col), diffsize+1);
+
+        (*buffer)[*col] = c;
+        //(*buffer)[*col+1] = '\0';
+        (*col)++;
+        (*buflen)++;
+
+        strncpy((*buffer)+(*col), tmp, diffsize+1);
+        free(tmp);
+    }
+    return *buflen;
+}
+
+int rm_chars(char *buffer[], const int bufsize, int *col, int *buflen, int n) {
+    if(*col >= bufsize || *buflen == 0 || *col <= 0 || *col > *buflen) return -1;
+
+    const size_t diffsize = (size_t)(*buflen - *col + 1);
+    char *tmp = (char*)malloc(sizeof(char)*diffsize);
+    strncpy(tmp, (*buffer)+(*col), diffsize);
+
+    if(n > *col) n = *col;
+    (*col) -= n;
+
+    strncpy((*buffer)+(*col), tmp, diffsize);
+    (*buflen) -= n;
+    (*buffer)[*buflen] = '\0';
+    free(tmp);
+
+    return *buflen;
+}
+
+// Remove char at col in buffer, decrement col and buffer
+int rm_char(char *buffer[], const int bufsize, int *col, int *buflen) {
+    if(*col >= bufsize || *buflen == 0 || *col <= 0 || *col > *buflen) return -1;
+    if(*col == *buflen) { // remove last character
+        (*buffer--)[--(*col)] = '\0';
+        (*buflen)--;
+        return *buflen;
+    } else {
+        return rm_chars(buffer, bufsize, col, buflen, 1);
+    }
 }
