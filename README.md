@@ -1,7 +1,9 @@
 # Crypto Chat
 
-WIP peer to peer encrypted chat system. You are free to use, copy, make edits
+WIP peer to peer encrypted chat system. You are free to use, copy, modify
 and distribute this project however you like.
+
+**CURRENT STATUS: Does NOT work**
 
 
 # Install procedure
