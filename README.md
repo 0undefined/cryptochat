@@ -22,6 +22,7 @@ Most of the prerequisites are available in most package managers.
 * [ ] Encryption layer
 * [ ] TUI
 * [ ] Implement commands
+  + [ ] Ditch current system and use BYacc and Flex instead
 * [ ] Better async execution
 * [ ] Tab completion
 
